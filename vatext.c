@@ -16,12 +16,15 @@ void enableRawMode(){
 	tcgetattr(STDIN_FILENO, &originalSettings);	//Saving settings here
 	atexit(disableRawMode);
 
+	//What these Flags mean, can be found here: https://www.man7.org/linux/man-pages/man3/termios.3.html
 	struct termios new = originalSettings;
-	new.c_lflag &= ~(ECHO | ICANON | ISIG);		//Turning off some variables (~ is a bitwise NOT operator)
-							//Note to self:
-							//	ECHO, ICANON etc are bitflags
-							//	c_lflag is a series of 1 and 0 and for example ECHO is 1000
-							//	We set attributes here by doing a bit flip on ECHO and ICANON bits on c_lflag
+	new.c_lflag &= ~(ECHO | ICANON | ISIG | IEXTEN);		//Turning off some variables (~ is a bitwise NOT operator)
+	new.c_iflag &= ~(BRKINT | ISTRIP | INPCK | IXON | ICRNL);			//Note to self:
+	new.c_oflag &= ~(OPOST);	//Output flags			//	ECHO, ICANON etc are bitflags
+	new.c_cflag |= (CS8);						//	c_lflag is a series of 1 and 0 and for example ECHO is 1000
+	new.c_cc[VMIN] = 0;						//	We set attributes here by doing a bit flip on for example ECHO and ICANON bits on c_lflag
+	new.c_cc[VTIME] = 1;
+	
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &new);	//Setting modified variables.
 
 }
@@ -29,14 +32,15 @@ void enableRawMode(){
 
 int main(){
 	enableRawMode();	//Enabling rawmode here	
-
-	char c;
-	while(read(STDIN_FILENO, &c, 1) == 1 && c != 'q'){
+	while(1){
+		char c = '\0';
+		read(STDIN_FILENO, &c, 1);
 		if(iscntrl(c)){
-			printf("%d\n", c);
+			printf("%d\r\n", c);
 		}else{
-			printf("%d ('%c')\n", c, c);
+			printf("%d ('%c')\r\n", c, c);	//\r is carriage return, Puts the cursor to the left side, when starting a new line
 		}
+		if(c== 'q')break;
 	}
 
 
