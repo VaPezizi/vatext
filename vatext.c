@@ -17,7 +17,7 @@ void enableRawMode(){
 	atexit(disableRawMode);
 
 	struct termios new = originalSettings;
-	new.c_lflag &= ~(ECHO | ICANON);		//Turning off some variables (~ is a bitwise NOT operator)
+	new.c_lflag &= ~(ECHO | ICANON | ISIG);		//Turning off some variables (~ is a bitwise NOT operator)
 							//Note to self:
 							//	ECHO, ICANON etc are bitflags
 							//	c_lflag is a series of 1 and 0 and for example ECHO is 1000
