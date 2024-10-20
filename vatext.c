@@ -5,7 +5,14 @@
 #include <unistd.h>
 #include <termios.h>
 
+/*====(Defines)====*/
+#define CONTROL_KEY(k) ((k) & 0x1f)	//Sets upper 3 bits to 0. (Basically mimics how Ctrl key works in the terminal)
+
+/*====( Variables )====*/
+
 struct termios originalSettings;		//Saving the terminals original attributes here
+
+/* ====(Terminal related functions (Raw mode etc))==== */
 
 void kill(const char * c){
 	perror(c);
@@ -35,20 +42,45 @@ void enableRawMode(){
 
 }
 
+char readKey(){
+	int error;
+	char c;
+	while((error = read(STDIN_FILENO, &c, 1)) != 1){
+		if(error == -1 && errno != EAGAIN) kill("read");
+	}
+
+	return c;
+}
+
+
+/* ====(input)==== */
+
+void processKeyPress(){
+	char c = readKey();
+	switch (c) {
+		case CONTROL_KEY('q'):
+			exit(0);
+			break;	
+	}
+
+}
+
+/* ====(init)==== */
 
 int main(){
 	enableRawMode();	//Enabling rawmode here	
 	while(1){
-		char c = '\0';
+/*		char c = '\0';
 		if(read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) kill("read");
 		if(iscntrl(c)){
 			printf("%d\r\n", c);
 		}else{
 			printf("%d ('%c')\r\n", c, c);	//\r is carriage return, Puts the cursor to the left side, when starting a new line
 		}
-		if(c== 'q')break;
+		if(c== CONTROL_KEY('q'))break;
+	}*/
+		processKeyPress();
 	}
-
 
 	return 0;
 }
