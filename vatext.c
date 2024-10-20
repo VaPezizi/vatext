@@ -1,3 +1,4 @@
+#include <sys/ioctl.h>
 #include <errno.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -10,27 +11,35 @@
 
 /*====( Variables )====*/
 
-struct termios originalSettings;		//Saving the terminals original attributes here
+struct editorConfig{
+	int winRows;
+	int winCols;	
+	struct termios originalSettings;	//Saving the terminals original attributes here
+};	
 
+struct editorConfig config;
 /* ====(Terminal related functions (Raw mode etc))==== */
 
 void kill(const char * c){
+	write(STDOUT_FILENO, "\x1b[2J", 4);
+	write(STDOUT_FILENO, "\x1b[H", 3);
+
 	perror(c);
 	exit(1);
 }
 
 //Simply restores the terminal to 
 void disableRawMode(){
-	if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &originalSettings) == -1) kill("tcsetattr");
+	if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &config.originalSettings) == -1) kill("tcsetattr");
 }
 
 //Enables "Raw mode" (Gives data directly to the Program without interprenting special characters)
 void enableRawMode(){
-	if(tcgetattr(STDIN_FILENO, &originalSettings) == -1) kill("tcsetattr");	//Saving settings here
+	if(tcgetattr(STDIN_FILENO, &config.originalSettings) == -1) kill("tcsetattr");	//Saving settings here
 	atexit(disableRawMode);
 
 	//What these Flags mean, can be found here: https://www.man7.org/linux/man-pages/man3/termios.3.html
-	struct termios new = originalSettings;
+	struct termios new = config.originalSettings;
 	new.c_lflag &= ~(ECHO | ICANON | ISIG | IEXTEN);		//Turning off some variables (~ is a bitwise NOT operator)
 	new.c_iflag &= ~(BRKINT | ISTRIP | INPCK | IXON | ICRNL);			//Note to self:
 	new.c_oflag &= ~(OPOST);	//Output flags			//	ECHO, ICANON etc are bitflags
@@ -42,6 +51,7 @@ void enableRawMode(){
 
 }
 
+//Does what we did in main before, reads a key and returns it
 char readKey(){
 	int error;
 	char c;
@@ -52,13 +62,47 @@ char readKey(){
 	return c;
 }
 
+int getWindowSize(int *rows, int * columns){
+	struct winsize ws;
 
-/* ====(input)==== */
+	if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws)==-1 || ws.ws_col == 0){	//TIOCGWINSZ is just a request wich gives the current window size (Even tough it looks scary)
+		return -1;							
+	}else{
+		*columns = ws.ws_col;
+		*rows = ws.ws_row;
+		return 0;
+	}
+}
 
+/* ====(Output)====*/
+
+void drawRows(){
+	int x;
+	for(x=0; x < config.winRows; x++){
+		write(STDOUT_FILENO, "~\r\n", 3);
+	}
+}
+
+void refreshScreen(){
+	write(STDOUT_FILENO, "\x1b[2J", 4);	//Clearing the Screen
+	write(STDOUT_FILENO, "\x1b[H", 3);	//Setting the cursor to home position
+
+	drawRows();				//Draws
+
+	write(STDOUT_FILENO, "\x1b[H", 3);
+}
+
+/* ====(Input)==== */
+
+//Reading input goes trough this "Filter" type of function, where we look for special keys etc
 void processKeyPress(){
 	char c = readKey();
 	switch (c) {
 		case CONTROL_KEY('q'):
+			
+			write(STDOUT_FILENO, "\x1b[2J", 4);
+			write(STDOUT_FILENO, "\x1b[H", 3);
+
 			exit(0);
 			break;	
 	}
@@ -67,18 +111,15 @@ void processKeyPress(){
 
 /* ====(init)==== */
 
+void initEditor(){
+	if(getWindowSize(&config.winRows, &config.winCols) == -1) kill("Get Window size");
+}
+
 int main(){
 	enableRawMode();	//Enabling rawmode here	
+	initEditor();
 	while(1){
-/*		char c = '\0';
-		if(read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) kill("read");
-		if(iscntrl(c)){
-			printf("%d\r\n", c);
-		}else{
-			printf("%d ('%c')\r\n", c, c);	//\r is carriage return, Puts the cursor to the left side, when starting a new line
-		}
-		if(c== CONTROL_KEY('q'))break;
-	}*/
+		refreshScreen();
 		processKeyPress();
 	}
 
