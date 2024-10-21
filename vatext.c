@@ -1,3 +1,4 @@
+#include <string.h>
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <ctype.h>
@@ -66,17 +67,17 @@ int getCursorPosition(int *rows, int * columns){
 	char buffer[32];
 	unsigned int i = 0;
 	
-	if(write(STDOUT_FILENO, "\x1b[6n", 4) != 4) return -1;
+	if(write(STDOUT_FILENO, "\x1b[6n", 4) != 4) return -1;		//6n Means we are asking for the cursor position
 
 	while (i < sizeof(buffer) - 1){
-		if(read(STDIN_FILENO, &buffer[i], 1) != 1)break;
-		if(buffer[i] == 'R')break;
+		if(read(STDIN_FILENO, &buffer[i], 1) != 1)break;	//Reading the bytes in to the buffer
+		if(buffer[i] == 'R')break;				//'R' is in the "Cursor Position Report", that's why we read till there
 		i++;
 	}
-	buffer[i] = '\0';
+	buffer[i] = '\0';						//Adding a '0 byte' to the end of the string
 
-	if (buffer[0] != '\x1b' || buffer[1] != '[') return -1;
-	if (sscanf(&buffer[2], "%d;%d", rows, columns) != 2) return -1;
+	if (buffer[0] != '\x1b' || buffer[1] != '[') return -1;		
+	if (sscanf(&buffer[2], "%d;%d", rows, columns) != 2) return -1;		//Parsing the resulting two numbers and saving to rows and columns
 	return 0;	
 }
 
@@ -85,7 +86,7 @@ int getWindowSize(int *rows, int * columns){
 
 	if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws)==-1 || ws.ws_col == 0){	//TIOCGWINSZ is just a request wich gives the current window size (Even tough it looks scary)
 		if(write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) return -1;
-		return getCursorPosition(rows, columns);			//Using the fallback method 
+		return getCursorPosition(rows, columns);			//Using the fallback method if ioctl Fails 
 	}else{
 		*columns = ws.ws_col;
 		*rows = ws.ws_row;
@@ -93,12 +94,24 @@ int getWindowSize(int *rows, int * columns){
 	}
 }
 
+/* ====(Append Buffer)==== */
+struct appendBuffer{
+	char * buffer;
+	int len;
+};
+
+#define ABUF_INIT {NULL, 0}	//"Constructor" for out appendBuffer type
+
 /* ====(Output)====*/
 
 void drawRows(){
 	int x;
 	for(x=0; x < config.winRows; x++){
-		write(STDOUT_FILENO, "~\r\n", 3);
+		write(STDOUT_FILENO, "~", 1);			//Writing tildes to the screen
+
+		if(x < config.winRows - 1){			//Fixes a bug with adding an extra blank line to the bottom
+			write(STDOUT_FILENO, "\r\n",2);		//Writing carriage return and newline to the screen
+		}
 	}
 }
 
