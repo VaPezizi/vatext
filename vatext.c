@@ -25,6 +25,8 @@ struct editorConfig config;
 void kill(const char * c){
 	write(STDOUT_FILENO, "\x1b[2J", 4);
 	write(STDOUT_FILENO, "\x1b[H", 3);
+	
+	write(STDOUT_FILENO, "\x1b[?25h", 6);
 
 	perror(c);
 	exit(1);
@@ -180,6 +182,7 @@ void processKeyPress(){
 			write(STDOUT_FILENO, "\x1b[2J", 4);
 			write(STDOUT_FILENO, "\x1b[H", 3);
 			//disableRawMode();
+			write(STDOUT_FILENO, "\x1b[?25h", 6);
 			exit(0);
 			break;	
 	}
