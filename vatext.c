@@ -10,6 +10,7 @@
 /*====(Defines)====*/
 #define CONTROL_KEY(k) ((k) & 0x1f)	//Sets upper 3 bits to 0. (Basically mimics how Ctrl key works in the terminal)
 
+#define VATEXT_VERSION "0.0.1"
 /*====( Variables )====*/
 
 struct editorConfig{
@@ -102,26 +103,70 @@ struct appendBuffer{
 
 #define ABUF_INIT {NULL, 0}	//"Constructor" for out appendBuffer type
 
+//Appends a string to the end of a buffer
+void appendBufferAppend(struct appendBuffer * aBuff, const char * s, int len){
+	char * new = realloc(aBuff->buffer, aBuff->len + len);		//Reallocating memory for the new buffer
+
+	if(new == NULL) return;
+	memcpy(&new[aBuff->len], s, len);		//Copying the appendable string to the end of the buffer
+	aBuff->buffer = new;
+	aBuff->len += len;
+}
+//Simply frees the buffer
+void freeBuffer(struct appendBuffer * aBuff){
+	free(aBuff->buffer);
+}
+
+
 /* ====(Output)====*/
 
-void drawRows(){
+void drawRows(struct appendBuffer * aBuff){
 	int x;
 	for(x=0; x < config.winRows; x++){
-		write(STDOUT_FILENO, "~", 1);			//Writing tildes to the screen
+		if(x == config.winRows / 3){
+			char welcome [80];
+			int welcomeLen = snprintf(welcome, sizeof(welcome), "---- VaText Ver: %s ----", VATEXT_VERSION);		//Printing a simple welcome message
 
+			if(welcomeLen > config.winRows) welcomeLen = config.winRows;
+			int padding = (config.winCols - welcomeLen) / 2;	//Getting a paadding to center the string
+			
+			if(padding){
+				appendBufferAppend(aBuff, "~", 1);
+				padding--;
+			}
+
+			while(padding--) appendBufferAppend(aBuff, " ", 1);	//Adding the padding here
+			appendBufferAppend(aBuff, welcome, welcomeLen);
+		
+		}else{
+			appendBufferAppend(aBuff, "~", 1);	//Writing tildes to start of line
+		}
+	
+		appendBufferAppend(aBuff, "\x1b[K", 3);		
 		if(x < config.winRows - 1){			//Fixes a bug with adding an extra blank line to the bottom
-			write(STDOUT_FILENO, "\r\n",2);		//Writing carriage return and newline to the screen
+			//write(STDOUT_FILENO, "\r\n",2);		//Writing carriage return and newline to the screen
+			appendBufferAppend(aBuff, "\r\n", 2);
 		}
 	}
 }
 
 void refreshScreen(){
-	write(STDOUT_FILENO, "\x1b[2J", 4);	//Clearing the Screen
-	write(STDOUT_FILENO, "\x1b[H", 3);	//Setting the cursor to home position
+	struct appendBuffer aBuff = ABUF_INIT;	//Creating the buffer
 
-	drawRows();				//Draws
+	appendBufferAppend(&aBuff, "\x1b[?25l", 6);	//Hides the cursor for a moment, fixing possible flickering effects (?25l hides the cursor, might not work on all terminal emulators)
+	//appendBufferAppend(&aBuff, "\x1b[2J", 4);
+	appendBufferAppend(&aBuff, "\x1b[H", 3);
 
-	write(STDOUT_FILENO, "\x1b[H", 3);
+	//write(STDOUT_FILENO, "\x1b[2J", 4);	//Clearing the Screen
+	//write(STDOUT_FILENO, "\x1b[H", 3);	//Setting the cursor to home position
+
+	drawRows(&aBuff);				//Draws
+
+	appendBufferAppend(&aBuff, "\x1b[H", 3);
+	appendBufferAppend(&aBuff, "\x1b[?25l", 6);	//Another part of fixing any flickering
+
+	write(STDOUT_FILENO, aBuff.buffer, aBuff.len);
+	freeBuffer(&aBuff);
 }
 
 /* ====(Input)==== */
@@ -134,7 +179,7 @@ void processKeyPress(){
 			
 			write(STDOUT_FILENO, "\x1b[2J", 4);
 			write(STDOUT_FILENO, "\x1b[H", 3);
-
+			//disableRawMode();
 			exit(0);
 			break;	
 	}
