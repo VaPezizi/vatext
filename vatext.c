@@ -11,6 +11,13 @@
 #define CONTROL_KEY(k) ((k) & 0x1f)	//Sets upper 3 bits to 0. (Basically mimics how Ctrl key works in the terminal)
 
 #define VATEXT_VERSION "0.0.1"
+
+enum editorKey{
+	ARROW_LEFT = 1000,
+	ARROW_RIGHT,
+	ARROW_UP,
+	ARROW_DOWN
+};
 /*====( Variables )====*/
 
 struct editorConfig{
@@ -57,16 +64,31 @@ void enableRawMode(){
 }
 
 //Does what we did in main before, reads a key and returns it
-char readKey(){
+int readKey(){
 	int error;
 	char c;
 	while((error = read(STDIN_FILENO, &c, 1)) != 1){
 		if(error == -1 && errno != EAGAIN) kill("read");
 	}
+	if(c=='\x1b'){				//Basically, if we encounter an escape character, we read two more bytes to the "seq" buffer
+		char seq[3];
 
-	return c;
+		if(read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';		
+		if(read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';		//If these timeout (return -1), we assume the user just pressed Escape and return that
+
+		if(seq[0] == '['){
+			switch (seq[1]){
+				case 'A': return ARROW_UP;	//Up = \x1b[A
+				case 'B': return ARROW_DOWN;	//Down = \x1b[B... You get the point. We translate arrow keys to wasd for easy movement
+				case 'C': return ARROW_RIGHT;
+				case 'D': return ARROW_LEFT;
+			}
+		}
+		return '\x1b';		//We return this, if its an escape character that we don't use
+	}else{
+		return c;		//Else just return the key pressed
+	}
 }
-
 int getCursorPosition(int *rows, int * columns){
 	char buffer[32];
 	unsigned int i = 0;
@@ -178,26 +200,34 @@ void refreshScreen(){
 /* ====(Input)==== */
 
 //Pretty self explanitory, moves the cursor to specified direction
-void moveCursor(char key){
+void moveCursor(int key){
 	switch (key){
-		case 'a':
-			config.cursorX--;
+		case ARROW_LEFT:
+			if(config.cursorX != 0){
+				config.cursorX--;
+			}
 			break;
-		case 'w':
-			config.cursorY--;
+		case ARROW_UP:
+			if(config.cursorY != 0){
+				config.cursorY--;
+			}
 			break;
-		case 's':
-			config.cursorY++;
+		case ARROW_DOWN:
+			if(config.cursorY != config.winRows - 1){
+				config.cursorY++;
+			}
 			break;
-		case 'd':
-			config.cursorX++;
+		case ARROW_RIGHT:
+			if(config.cursorY != config.winCols -1){
+				config.cursorX++;
+			}
 			break;
 	}
 }
 
 //Reading input goes trough this "Filter" type of function, where we look for special keys etc
 void processKeyPress(){
-	char c = readKey();
+	int c = readKey();
 	switch (c) {
 		case CONTROL_KEY('q'):
 			
@@ -207,10 +237,10 @@ void processKeyPress(){
 			write(STDOUT_FILENO, "\x1b[?25h", 6);
 			exit(0);
 			break;	
-		case 'w':
-		case 's':
-		case 'a':
-		case 'd':
+		case ARROW_UP:
+		case ARROW_DOWN:
+		case ARROW_LEFT:
+		case ARROW_RIGHT:
 			moveCursor(c);
 			break;
 	}
