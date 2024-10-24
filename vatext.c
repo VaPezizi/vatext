@@ -14,6 +14,7 @@
 /*====( Variables )====*/
 
 struct editorConfig{
+	int cursorX, cursorY;
 	int winRows;
 	int winCols;	
 	struct termios originalSettings;	//Saving the terminals original attributes here
@@ -154,7 +155,7 @@ void drawRows(struct appendBuffer * aBuff){
 
 void refreshScreen(){
 	struct appendBuffer aBuff = ABUF_INIT;	//Creating the buffer
-
+	//?25l
 	appendBufferAppend(&aBuff, "\x1b[?25l", 6);	//Hides the cursor for a moment, fixing possible flickering effects (?25l hides the cursor, might not work on all terminal emulators)
 	//appendBufferAppend(&aBuff, "\x1b[2J", 4);
 	appendBufferAppend(&aBuff, "\x1b[H", 3);
@@ -163,15 +164,36 @@ void refreshScreen(){
 	//write(STDOUT_FILENO, "\x1b[H", 3);	//Setting the cursor to home position
 
 	drawRows(&aBuff);				//Draws
+	
+	char buf[32];
+	snprintf(buf, sizeof(buf), "\x1b[%d;%dH", config.cursorY + 1, config.cursorX + 1);	//Constructing a string with an escape seguence to move the cursor
 
-	appendBufferAppend(&aBuff, "\x1b[H", 3);
-	appendBufferAppend(&aBuff, "\x1b[?25l", 6);	//Another part of fixing any flickering
+	appendBufferAppend(&aBuff, buf, strlen(buf));	//Appending the buffer
+	appendBufferAppend(&aBuff, "\x1b[?25h", 6);	//Another part of fixing any flickering
 
 	write(STDOUT_FILENO, aBuff.buffer, aBuff.len);
 	freeBuffer(&aBuff);
 }
 
 /* ====(Input)==== */
+
+//Pretty self explanitory, moves the cursor to specified direction
+void moveCursor(char key){
+	switch (key){
+		case 'a':
+			config.cursorX--;
+			break;
+		case 'w':
+			config.cursorY--;
+			break;
+		case 's':
+			config.cursorY++;
+			break;
+		case 'd':
+			config.cursorX++;
+			break;
+	}
+}
 
 //Reading input goes trough this "Filter" type of function, where we look for special keys etc
 void processKeyPress(){
@@ -181,10 +203,16 @@ void processKeyPress(){
 			
 			write(STDOUT_FILENO, "\x1b[2J", 4);
 			write(STDOUT_FILENO, "\x1b[H", 3);
-			//disableRawMode();
+			disableRawMode();
 			write(STDOUT_FILENO, "\x1b[?25h", 6);
 			exit(0);
 			break;	
+		case 'w':
+		case 's':
+		case 'a':
+		case 'd':
+			moveCursor(c);
+			break;
 	}
 
 }
@@ -192,6 +220,9 @@ void processKeyPress(){
 /* ====(init)==== */
 
 void initEditor(){
+	config.cursorX = 0;		//Saving inital cursor position here
+	config.cursorY = 0;
+
 	if(getWindowSize(&config.winRows, &config.winCols) == -1) kill("Get Window size");
 }
 
